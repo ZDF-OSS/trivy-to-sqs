@@ -13,7 +13,7 @@ from enrich import enrich_payload  # Import the enrichment function
 logging.basicConfig(level=logging.INFO)
 
 # Initialize SQS client
-sqs = boto3.client('sqs')
+sqs = boto3.client('sqs', region_name='eu-central-1')
 
 cluster_name = get_cluster_name()  # Get cluster name dynamically
 
