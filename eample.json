@@ -1,0 +1,4 @@
+{
+    "queue_name": "my-sqs-simple-cve-messages",
+    "account_id": "12345"
+}

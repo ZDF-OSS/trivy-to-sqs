@@ -1,0 +1,5 @@
+colorama
+Pillow
+ascii-magic
+kubernetes
+boto3
