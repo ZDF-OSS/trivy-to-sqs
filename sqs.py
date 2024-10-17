@@ -16,7 +16,8 @@ logging.basicConfig(level=logging.INFO)
 sqs = boto3.client('sqs')
 
 cluster_name = get_cluster_name()  # Get cluster name dynamically
-    
+
+
 def load_config():
     """
     Load configuration from a local JSON file (config.json).
@@ -28,6 +29,7 @@ def load_config():
     except Exception as e:
         logging.error(f"Failed to load configuration: {e}")
         sys.exit(1)
+
 
 def send_to_sqs(queue_name, account_id, message_body):
     """

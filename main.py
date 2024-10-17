@@ -35,7 +35,7 @@ def main() -> None:
     images = get_all_distinct_images()
 
     for image in images:
-        if image.startswith("sha256"):
+        if "sha256" in image:
             logging.info(f"Skipped image: {image}")
             continue
         image_container = image.split(";")
