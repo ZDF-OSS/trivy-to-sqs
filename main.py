@@ -5,6 +5,7 @@ from colorama import Fore
 from utils import get_cluster_name, check_trivy_installed, get_all_distinct_images
 from scan import scan_image
 from sqs import send_to_input_sqs
+from epss import download_and_load_epss_scores, get_epss_scores_from_file
 
 # Set up logging
 scan_timestamp = datetime.now().strftime("%Y%m%d-%H%M")
@@ -12,6 +13,9 @@ log_filename = f"scan_log_{scan_timestamp}.log"
 logging.basicConfig(filename=log_filename, level=logging.INFO,
                     format='%(asctime)s:%(levelname)s:%(message)s')
 
+# Load EPSS data globally
+epss_url = "https://epss.cyentia.com/epss_scores-current.csv.gz"
+epss_df = download_and_load_epss_scores(epss_url)
 
 def prompt_user(cluster_name):
     print(f"\nCluster Name: {cluster_name}")
@@ -19,6 +23,16 @@ def prompt_user(cluster_name):
         "Do you want to scan the current cluster content? (yes/no): ").strip().lower()
     return response == 'yes'
 
+def enrich_with_epss(vulnerabilities):
+    """Enrich vulnerabilities with EPSS scores."""
+    cve_ids = [v['VulnerabilityID'] for v in vulnerabilities if 'VulnerabilityID' in v]
+    epss_scores = get_epss_scores_from_file(cve_ids, epss_df)
+    
+    for vuln in vulnerabilities:
+        vulnerability_id = vuln.get('VulnerabilityID')
+        if vulnerability_id:
+            vuln['EPSS'] = epss_scores.get(vulnerability_id, "N/A")
+    return vulnerabilities
 
 def main() -> None:
     print(f"{Fore.CYAN}Kubernetes CVE Scanner by ZERODOTFIVE Hamburg GmbH - moin@zerodotfive.com")
@@ -53,7 +67,10 @@ def main() -> None:
                     single_scan_result['Results'] = [result]
 
                     vulnerabilities = result.get('Vulnerabilities', [])
-                    for vuln in vulnerabilities:
+                    
+                    # Enrich vulnerabilities with EPSS scores
+                    enriched_vulnerabilities = enrich_with_epss(vulnerabilities)
+                    for vuln in enriched_vulnerabilities:
                         single_vulnerability = copy.deepcopy(single_scan_result)
                         single_vulnerability['Results'][0]['Vulnerabilities'] = [vuln]
                         single_vulnerability['Results'][0]['References'] = []
@@ -61,7 +78,7 @@ def main() -> None:
                         # Send each vulnerability to SQS
                         send_to_input_sqs(container_name=container, scan_payload=single_vulnerability)
 
-                    all_vulnerabilities.extend(vulnerabilities)
+                    all_vulnerabilities.extend(enriched_vulnerabilities)
 
                 summary = {
                     'image': f"image:{image}",
@@ -79,8 +96,6 @@ def main() -> None:
                     f"{Fore.YELLOW}Medium: {summary['medium']}, "
                     f"{Fore.GREEN}Low: {summary['low']}"
                     )
-                logging.info(f"Summary for image: {image}: Total: {summary['total']}, High: {summary['high']}, "
-                             f"Critical: {summary['critical']}, Medium: {summary['medium']}, Low: {summary['low']}")
             else:
                 print(f"Scanning {image} error")
                 error_message = f"Failed to scan image: {image}\n{error_message}\n"
